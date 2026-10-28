@@ -28,9 +28,17 @@ export const SCREENSHOT_MIMETYPE = "image/png";
 function safeUploadedFileName(originalName: string): string {
   const fileName = basename(originalName.replaceAll("\\", "/"));
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return safeName === "" || safeName === "." || safeName === ".."
-    ? "upload"
-    : safeName;
+  if (safeName === "" || safeName === "." || safeName === "..") {
+    return "upload";
+  }
+  if (safeName.length <= 255) {
+    return safeName;
+  }
+  const extensionStart = safeName.lastIndexOf(".");
+  const extension = extensionStart > 0 ? safeName.slice(extensionStart) : "";
+  return extension.length < 255
+    ? safeName.slice(0, 255 - extension.length) + extension
+    : "upload";
 }
 
 async function withTemporaryFile<T>(
