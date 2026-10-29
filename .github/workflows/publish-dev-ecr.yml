@@ -1,0 +1,144 @@
+name: Publish REST Image to Dev ECR
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-dev-ecr
+  cancel-in-progress: false
+
+env:
+  GHCR_REGISTRY: ghcr.io
+  GHCR_IMAGE_NAME: ${{ vars.GHCR_IMAGE_NAME || 'legaldesk-app/liteparse-server' }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID || '673409897086' }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'streamline-dev-liteparse' }}
+  SSM_IMAGE_TAG_PARAM: ${{ vars.SSM_IMAGE_TAG_PARAM || '/streamline-dev-liteparse/image-tag' }}
+
+jobs:
+  publish:
+    name: Build, mirror, and promote REST image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image references
+        id: image
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          image_tag="sha-${COMMIT_SHA:0:12}"
+          ghcr_image="${GHCR_REGISTRY}/${GHCR_IMAGE_NAME}"
+          ecr_registry="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          ecr_image="${ecr_registry}/${ECR_REPOSITORY}"
+
+          echo "tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "ghcr_image=${ghcr_image}" >> "$GITHUB_OUTPUT"
+          echo "ecr_image=${ecr_image}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+
+      - name: Log into GHCR
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image to GHCR
+        id: build
+        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        with:
+          context: .
+          file: slim.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.ghcr_image }}:${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+      - name: Log into ECR
+        env:
+          ECR_REGISTRY: ${{ steps.image.outputs.ecr_image }}
+        run: |
+          ecr_registry="${ECR_REGISTRY%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$ecr_registry"
+
+      - name: Mirror image from GHCR to ECR
+        env:
+          SOURCE_IMAGE: ${{ steps.image.outputs.ghcr_image }}
+          SOURCE_DIGEST: ${{ steps.build.outputs.digest }}
+          DESTINATION_IMAGE: ${{ steps.image.outputs.ecr_image }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${DESTINATION_IMAGE}:${IMAGE_TAG}" \
+            "${SOURCE_IMAGE}@${SOURCE_DIGEST}"
+
+      - name: Verify ECR digest
+        id: verify
+        env:
+          SOURCE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        run: |
+          destination_digest="$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+
+          if [[ "$SOURCE_DIGEST" != "$destination_digest" ]]; then
+            echo "Digest mismatch: GHCR=$SOURCE_DIGEST ECR=$destination_digest"
+            exit 1
+          fi
+
+          echo "destination_digest=${destination_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Update SSM image tag
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          aws ssm put-parameter \
+            --name "$SSM_IMAGE_TAG_PARAM" \
+            --type String \
+            --value "$IMAGE_TAG" \
+            --overwrite \
+            --region "$AWS_REGION"
+
+      - name: Write job summary
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+          GHCR_IMAGE: ${{ steps.image.outputs.ghcr_image }}
+          ECR_IMAGE: ${{ steps.image.outputs.ecr_image }}
+          SOURCE_DIGEST: ${{ steps.build.outputs.digest }}
+          DESTINATION_DIGEST: ${{ steps.verify.outputs.destination_digest }}
+        run: |
+          {
+            echo "## Dev ECR image published"
+            echo ""
+            echo "- Tag: \\`$IMAGE_TAG\\`"
+            echo "- GHCR image: \\`$GHCR_IMAGE@$SOURCE_DIGEST\\`"
+            echo "- ECR image: \\`$ECR_IMAGE@$DESTINATION_DIGEST\\`"
+            echo "- SSM parameter: \\`$SSM_IMAGE_TAG_PARAM\\`"
+          } >> "$GITHUB_STEP_SUMMARY"
