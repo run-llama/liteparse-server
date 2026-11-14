@@ -223,12 +223,7 @@ describe("Test caching for screenshots", () => {
     await cache.setScreenshot(HASH, undefined, undefined, SCREENSHOTS);
     const result = await cache.getScreenshot(HASH, undefined, undefined);
     expect(result).toBeTruthy();
-    expect(
-      result!.map((r) => ({
-        ...r,
-        imageBuffer: Buffer.from(r.imageBuffer),
-      })),
-    ).toStrictEqual(SCREENSHOTS);
+    expect(result).toStrictEqual(SCREENSHOTS);
     const noConf = await cache.getScreenshot(HASH, undefined, { dpi: 180 });
     expect(noConf).toBeNull();
     const noPages = await cache.getScreenshot(HASH, "1,2", undefined);
@@ -241,12 +236,7 @@ describe("Test caching for screenshots", () => {
     await cache.setScreenshot(HASH, undefined, config, SCREENSHOTS);
     const result = await cache.getScreenshot(HASH, undefined, config);
     expect(result).toBeTruthy();
-    expect(
-      result!.map((r) => ({
-        ...r,
-        imageBuffer: Buffer.from(r.imageBuffer),
-      })),
-    ).toStrictEqual(SCREENSHOTS);
+    expect(result).toStrictEqual(SCREENSHOTS);
     const diffConf = await cache.getScreenshot(HASH, undefined, { dpi: 180 });
     expect(diffConf).toBeNull();
     const noConf = await cache.getScreenshot(HASH, undefined, undefined);
@@ -260,12 +250,7 @@ describe("Test caching for screenshots", () => {
     await cache.setScreenshot(HASH, "1,2", undefined, SCREENSHOTS.slice(0, 2));
     const result = await cache.getScreenshot(HASH, "1,2", undefined);
     expect(result).toBeTruthy();
-    expect(
-      result!.map((r) => ({
-        ...r,
-        imageBuffer: Buffer.from(r.imageBuffer),
-      })),
-    ).toStrictEqual(SCREENSHOTS.slice(0, 2));
+    expect(result).toStrictEqual(SCREENSHOTS.slice(0, 2));
     const noConf = await cache.getScreenshot(HASH, "1,2", { dpi: 180 });
     expect(noConf).toBeNull();
     const noPages = await cache.getScreenshot(HASH, undefined, undefined);
@@ -278,12 +263,7 @@ describe("Test caching for screenshots", () => {
     await cache.setScreenshot(HASH, "1,2", config, SCREENSHOTS.slice(0, 2));
     const result = await cache.getScreenshot(HASH, "1,2", config);
     expect(result).toBeTruthy();
-    expect(
-      result!.map((r) => ({
-        ...r,
-        imageBuffer: Buffer.from(r.imageBuffer),
-      })),
-    ).toStrictEqual(SCREENSHOTS.slice(0, 2));
+    expect(result).toStrictEqual(SCREENSHOTS.slice(0, 2));
     const diffConf = await cache.getScreenshot(HASH, "1,2", { dpi: 180 });
     expect(diffConf).toBeNull();
     const noConf = await cache.getScreenshot(HASH, "1,2", undefined);

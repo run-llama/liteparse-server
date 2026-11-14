@@ -212,23 +212,22 @@ app.post("/screenshots", upload.single("file"), async (req, res) => {
 
   const cache = getCache();
   const fileHash = getFileHash(fl);
-  const stored = await cache.getScreenshot(fileHash, loadedPages, loadedConfig);
-  if (stored) {
+  let result = await cache.getScreenshot(fileHash, loadedPages, loadedConfig);
+  if (result) {
     trace.getActiveSpan()?.setAttribute("cache.hit", "true");
     cacheScreenshotHitsTotal.add(1);
     logger.info("Returning cached screenshot result");
-    res.header("Content-Type", "application/json").status(200).send(stored);
-    return;
-  }
-  trace.getActiveSpan()?.setAttribute("cache.hit", "false");
+  } else {
+    trace.getActiveSpan()?.setAttribute("cache.hit", "false");
 
-  const result = await screenshot({
-    file: fl,
-    config: loadedConfig,
-    pageNumbers: toScreenshot,
-  });
-  await cache.setScreenshot(fileHash, loadedPages, loadedConfig, result);
-  logger.debug("Uploaded screenshot result to cache");
+    result = await screenshot({
+      file: fl,
+      config: loadedConfig,
+      pageNumbers: toScreenshot,
+    });
+    await cache.setScreenshot(fileHash, loadedPages, loadedConfig, result);
+    logger.debug("Uploaded screenshot result to cache");
+  }
   res.setHeader("Content-Type", "application/x-ndjson");
   for (let i = 0; i < result.length; i++) {
     const { imageBuffer, pageNum, height, width } = result[i]!;
