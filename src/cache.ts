@@ -111,7 +111,13 @@ export class RedisCache {
       `${this.screenshotPrefix}:${pages ? pages : "all"}:${conf}:${fileHash}`,
     );
     if (stored) {
-      return JSON.parse(stored) as ScreenshotResult[];
+      const result = JSON.parse(stored) as ScreenshotResult[];
+      // Buffer.toJSON() stores { type: "Buffer", data: [...] }; restore the
+      // Buffer before callers encode screenshots just like fresh results.
+      for (const shot of result) {
+        shot.imageBuffer = Buffer.from(shot.imageBuffer);
+      }
+      return result;
     }
     return null;
   }
