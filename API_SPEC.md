@@ -46,6 +46,10 @@ Renders document pages as PNG images and streams them back as newline-delimited 
 | --------- | ------ | ------- | ----------------------------------------------------------------- |
 | `pages`   | string | all     | Comma-separated 1-based page numbers to screenshot (e.g. `1,2,3`) |
 
+Page numbers must be positive decimal integers that can be represented safely.
+An omitted or empty `pages` parameter selects all pages. Invalid selectors (for
+example `1abc`, `1.5`, `0` or `1,,2`) return `400` with a `detail` message.
+
 **Response `200 application/x-ndjson`** — one JSON object per line:
 
 ```json

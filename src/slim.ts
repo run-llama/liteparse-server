@@ -1,6 +1,12 @@
 import express from "express";
 import multer from "multer";
-import { isComplex, parse, screenshot, SCREENSHOT_MIMETYPE } from "./utils";
+import {
+  isComplex,
+  parse,
+  parseScreenshotPages,
+  screenshot,
+  SCREENSHOT_MIMETYPE,
+} from "./utils";
 import type { LiteParseConfig, ParsedPage } from "@llamaindex/liteparse";
 import { PrefixedLogger } from "./logger";
 
@@ -107,10 +113,7 @@ app.post("/screenshots", upload.single("file"), async (req, res) => {
   }
   let toScreenshot: number[] | undefined;
   try {
-    toScreenshot =
-      loadedPages != ""
-        ? loadedPages.split(",").map((p) => parseInt(p))
-        : undefined;
+    toScreenshot = parseScreenshotPages(loadedPages);
   } catch (e) {
     logger.error(`An error occurred while parsing page parameter: ${e}`);
     res.status(400).send({

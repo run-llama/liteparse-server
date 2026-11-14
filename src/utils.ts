@@ -22,6 +22,18 @@ import {
 
 export const SCREENSHOT_MIMETYPE = "image/png";
 
+export function parseScreenshotPages(pages: string): number[] | undefined {
+  if (pages === "") return undefined;
+  return pages.split(",").map((value) => {
+    const token = value.trim();
+    const page = Number(token);
+    if (!/^\d+$/.test(token) || !Number.isSafeInteger(page) || page < 1) {
+      throw new Error("pages must contain comma-separated positive integers");
+    }
+    return page;
+  });
+}
+
 export async function parse({
   file,
   text = false,
