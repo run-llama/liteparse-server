@@ -7,6 +7,7 @@ on:
 
 jobs:
   publish-grpc:
+    environment: release
     permissions:
       id-token: write
       contents: read
@@ -44,6 +45,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-rest:
+    environment: release
     permissions:
       id-token: write
       contents: read
